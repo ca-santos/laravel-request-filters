@@ -16,7 +16,7 @@ class LaravelRequestFiltersTest extends TestCase
     protected function getPackageAliases($app)
     {
         return [
-            'laravel-query-filters' => LaravelRequestFilters::class,
+            'laravel-request-filters' => LaravelRequestFilters::class,
         ];
     }
 

@@ -10,24 +10,24 @@ use Illuminate\Support\Facades\Route;
 class ServiceProvider extends RouteServiceProvider
 {
 
-    const CONFIG_PATH = __DIR__ . '/../config/laravel-query-filters.php';
+    const CONFIG_PATH = __DIR__ . '/../config/laravel-request-filters.php';
 
     public function boot()
     {
 
         $this->publishes([
-            self::CONFIG_PATH => config_path('laravel-query-filters.php'),
+            self::CONFIG_PATH => config_path('laravel-request-filters.php'),
         ], 'config');
 
-        $modelsFolder = config('laravel-query-filters.models_folder');
+        $modelsFolder = config('laravel-request-filters.models_folder');
         $makeCache = function () use ($modelsFolder) {
             AutoClassDiscovery::discover($modelsFolder);
-            Cache::forever('laravel-query-filters-discovered', AutoClassDiscovery::getDiscovered());
+            Cache::forever('laravel-request-filters-discovered', AutoClassDiscovery::getDiscovered());
         };
 
         //SET CACHE
         if (app('env') === 'production') {
-            if (Cache::get('laravel-query-filters-discovered') === null) {
+            if (Cache::get('laravel-request-filters-discovered') === null) {
                 $makeCache();
             }
         } else {
@@ -44,10 +44,10 @@ class ServiceProvider extends RouteServiceProvider
     {
         $this->mergeConfigFrom(
             self::CONFIG_PATH,
-            'laravel-query-filters'
+            'laravel-request-filters'
         );
 
-        $this->app->bind('laravel-query-filters', function () {
+        $this->app->bind('laravel-request-filters', function () {
             return new LaravelRequestFilters();
         });
     }

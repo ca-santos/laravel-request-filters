@@ -9,7 +9,7 @@ if(!function_exists('laravelRequestFiltersDiscoveredLoadAll')){
     function laravelRequestFiltersDiscoveredLoadAll(): array
     {
 
-        $models = Cache::get('laravel-query-filters-discovered');
+        $models = Cache::get('laravel-request-filters-discovered');
 
         $modelsWithFilters = [];
         foreach ($models['class'] as $name => $item) {

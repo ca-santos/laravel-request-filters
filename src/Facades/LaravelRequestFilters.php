@@ -8,7 +8,7 @@ class LaravelRequestFilters extends Facade
 {
     protected static function getFacadeAccessor()
     {
-        return 'laravel-query-filters';
+        return 'laravel-request-filters';
     }
 
 }

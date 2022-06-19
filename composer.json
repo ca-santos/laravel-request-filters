@@ -1,5 +1,5 @@
 {
-  "name": "caue-santos/laravel-query-filters",
+  "name": "caue-santos/laravel-request-filters",
   "description": "A laravel request filters",
   "license": "MIT",
   "keywords": [
@@ -7,7 +7,7 @@
     "request",
     "filters"
   ],
-  "homepage": "https://github.com/caueSantos/laravel-query-filters",
+  "homepage": "https://github.com/caueSantos/laravel-request-filters",
   "type": "library",
   "authors": [
     {
