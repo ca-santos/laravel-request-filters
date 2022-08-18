@@ -2,6 +2,7 @@
 
 namespace CaueSantos\LaravelRequestFilters\Criteria;
 
+use CaueSantos\LaravelRequestFilters\Helpers;
 use Exception;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -118,6 +119,8 @@ class FilterCriteria extends BaseCriteria implements CriteriaContract
 
     private function transform(Builder $builder, string $columnArg, string $operator, mixed $value)
     {
+
+        $value = Helpers::convertValue($value);
 
         $value = $operator === 'like' ? "%$value%" : $value;
 
