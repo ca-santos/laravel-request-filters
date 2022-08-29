@@ -69,7 +69,7 @@ class ApplyCriteria
         $perPage = $options['per_page'] ?? request()->query('per_page', 30);
 
         $orderCriteria = new OrderByCriteria($builder, request(), $modelCriteria);
-        $smartSort = $orderCriteria->smartSort($options);
+        $smartSort = $orderCriteria->smartSort($options, $perPage);
         $builder = $smartSort[0];
 
         $results = ($total = $builder->toBase()->getCountForPagination())

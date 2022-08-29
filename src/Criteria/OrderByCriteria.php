@@ -48,7 +48,7 @@ class OrderByCriteria extends BaseCriteria implements CriteriaContract
      * @param string $direction
      * @return array
      */
-    private function sort(string $orderBy, string $direction = 'ASC'): array
+    private function sort(string $orderBy, string $direction = 'ASC', $limit = 30): array
     {
         $builder = $this->builder;
 
@@ -136,7 +136,6 @@ class OrderByCriteria extends BaseCriteria implements CriteriaContract
                     ];
 
                     $query = $query->select($select);
-
                     $query = $query->orderByRaw("ISNULL($orderBy), $orderBy $direction");
 
                     try {
@@ -146,7 +145,11 @@ class OrderByCriteria extends BaseCriteria implements CriteriaContract
                     }
 
                     $query = $builder->with($relationDotted);
-                    $query = $orderedIds ? $query->whereIn($basePrimaryKey, $orderedIds) : $query;
+                    $query = $orderedIds ?
+                        $query
+                            ->whereIn($basePrimaryKey, $orderedIds)
+                            ->orderByRaw('FIND_IN_SET (' . "{$baseTable}.{$basePrimaryKey}" . ', "' . implode(',', $orderedIds) . '")') :
+                        $query;
 
                     return [
                         'query' => $query,
@@ -158,7 +161,7 @@ class OrderByCriteria extends BaseCriteria implements CriteriaContract
             }
 
             return [
-                'query' => $query->orderByRaw("ISNULL($orderBy), $orderBy $direction"),
+                'query' => $builder->orderByRaw("ISNULL($orderBy), $orderBy $direction"),
                 'ordered_ids' => null
             ];
 
@@ -177,7 +180,7 @@ class OrderByCriteria extends BaseCriteria implements CriteriaContract
      * @throws Exception
      */
     #[ArrayShape([0 => Builder::class, 1 => 'string[]', 2 => 'string[]'])]
-    public function smartSort(array $options = []): array
+    public function smartSort(array $options = [], $limit = 30): array
     {
 
         $model = $this->builder->getModel();
@@ -206,14 +209,14 @@ class OrderByCriteria extends BaseCriteria implements CriteriaContract
         $orderedIds = [];
 
         foreach ($asc as $column) {
-            $sort = $this->sort($column);
+            $sort = $this->sort($column, 'ASC', $limit);
             $this->builder = $sort['query'];
             $ascColumns[] = $column;
             $orderedIds = $sort['ordered_ids'] ?? $orderedIds;
         }
 
         foreach ($desc as $column) {
-            $sort = $this->sort($column, 'DESC');
+            $sort = $this->sort($column, 'DESC', $limit);
             $this->builder = $sort['query'];
             $descColumns[] = $column;
             $orderedIds = $sort['ordered_ids'] ?? $orderedIds;
@@ -248,21 +251,15 @@ class OrderByCriteria extends BaseCriteria implements CriteriaContract
 
                 $sortFn = function ($item, $key) use ($relations, $sort) {
                     $dot = Arr::dot($item->toArray());
+
                     if (isset($dot[$relations . '.0.' . $sort])) {
                         return $dot[$relations . '.0.' . $sort];
                     }
+
                     return isset($dot[$relations . '.' . $sort]) ? strtolower($dot[$relations . '.' . $sort]) : null;
                 };
 
-                if ($direction === 'DESC') {
-
-                    $results = $results->sortByDesc($sortFn);
-
-                } else {
-
-                    $results = $results->sortBy($sortFn);
-
-                }
+                $results = $results->{$direction === 'DESC' ? 'sortByDesc' : 'sortBy'}($sortFn);
 
             }
 
