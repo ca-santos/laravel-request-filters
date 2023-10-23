@@ -46,7 +46,7 @@ class FilterCriteria extends BaseCriteria implements CriteriaContract
 
                     $this->builder = $this->builder->whereHas($relation, function ($query) use ($relation, $name, $column, $operator, $value, $definedRelation) {
 
-                        $name = (explode(':', $name)[0] ?? 'default') . ':' . implode(',', $this->replaceRalationForTable($relation, $definedRelation, $name));
+                        $name = (explode(':', $name)[0] ?? 'default') . ':' . implode(',', $this->replaceRelationForTable($relation, $definedRelation, $name));
 
                         return $this->transform(
                             $query,
@@ -81,12 +81,11 @@ class FilterCriteria extends BaseCriteria implements CriteriaContract
             'contains' => 'like',
             'ne' => '!='
         ];
-        return $ops[$operatorStr] ?: '=';
+        return $ops[$operatorStr] ?? '=';
     }
 
     private function removeRelationFromColumns(array $columns): array
     {
-
         $new = [];
         foreach ($columns as $column) {
             $ex = explode('.', $column);
@@ -94,7 +93,6 @@ class FilterCriteria extends BaseCriteria implements CriteriaContract
         }
 
         return $new;
-
     }
 
     private function getColumns(string $columnArg): array
@@ -103,9 +101,8 @@ class FilterCriteria extends BaseCriteria implements CriteriaContract
         return explode(',', count($ex) > 1 ? $ex[1] : $ex[0]);
     }
 
-    private function replaceRalationForTable(string $relation, array $definedRelation, string $columnArg): array
+    private function replaceRelationForTable(string $relation, array $definedRelation, string $columnArg): array
     {
-
         $ex = explode('.', $relation);
         $relationToTable = end($ex);
 
@@ -113,15 +110,13 @@ class FilterCriteria extends BaseCriteria implements CriteriaContract
         foreach ($this->getColumns($columnArg) as $column) {
             $new[] = str_replace($relation, $definedRelation[$relationToTable]['table'], $column);
         }
-        return $new;
 
+        return $new;
     }
 
     private function transform(Builder $builder, string $columnArg, string $operator, mixed $value)
     {
-
         $value = Helpers::convertValue($value);
-
         $value = $operator === 'like' ? "%$value%" : $value;
 
         $converters = [
@@ -131,7 +126,7 @@ class FilterCriteria extends BaseCriteria implements CriteriaContract
             'datetime' => function (Builder $query, array $columns) use ($operator, $value) {
                 return $query->whereDate($columns[0], $operator, $value);
             },
-            'is_null' => function (Builder $query, array $columns) use ($operator, $value) {
+            'isNull' => function (Builder $query, array $columns) use ($operator, $value) {
                 if ($value == 'true') {
                     return $query->whereNull($columns[0]);
                 } else {
@@ -144,11 +139,11 @@ class FilterCriteria extends BaseCriteria implements CriteriaContract
         ];
 
         $ex = explode(':', $columnArg);
+
         $converter = count($ex) > 1 && array_key_exists($ex[0], $converters) ? $ex[0] : 'default';
         $columns = explode(',', count($ex) > 1 ? $ex[1] : $ex[0]);
 
         return $converters[$converter]($builder, $columns);
-
     }
 
 }

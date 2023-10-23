@@ -3,14 +3,14 @@
 namespace CaueSantos\LaravelRequestFilters\Tests;
 
 use CaueSantos\LaravelRequestFilters\Facades\LaravelRequestFilters;
-use CaueSantos\LaravelRequestFilters\ServiceProvider;
+use CaueSantos\LaravelRequestFilters\RequestFiltersServiceProvider;
 use Orchestra\Testbench\TestCase;
 
 class LaravelRequestFiltersTest extends TestCase
 {
     protected function getPackageProviders($app)
     {
-        return [ServiceProvider::class];
+        return [RequestFiltersServiceProvider::class];
     }
 
     protected function getPackageAliases($app)

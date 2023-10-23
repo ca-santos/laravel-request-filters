@@ -2,13 +2,11 @@
 
 namespace CaueSantos\LaravelRequestFilters\Criteria;
 
-use App\Core\Helpers;
 use Exception;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
-use JetBrains\PhpStorm\ArrayShape;
 
 class OrderByCriteria extends BaseCriteria implements CriteriaContract
 {
@@ -46,9 +44,10 @@ class OrderByCriteria extends BaseCriteria implements CriteriaContract
     /**
      * @param string $orderBy
      * @param string $direction
+     * @param int $limit
      * @return array
      */
-    private function sort(string $orderBy, string $direction = 'ASC', $limit = 30): array
+    private function sort(string $orderBy, string $direction = 'ASC', int $limit = 30): array
     {
         $builder = $this->builder;
 
@@ -80,6 +79,7 @@ class OrderByCriteria extends BaseCriteria implements CriteriaContract
                     $tableNow = $baseTable;
                     $keyNow = $basePrimaryKey;
                     $key = 0;
+
                     foreach ($definedRelations as $r) {
 
                         $table = $r['table'];
@@ -141,10 +141,14 @@ class OrderByCriteria extends BaseCriteria implements CriteriaContract
                     try {
                         $orderedIds = $query->get()->pluck($basePrimaryKeyAlias)->toArray();
                     } catch (Exception $ex) {
+                        if(env('APP_DEBUG')){
+                            dd($ex);
+                        }
                         $orderedIds = null;
                     }
 
                     $query = $builder->with($relationDotted);
+
                     $query = $orderedIds ?
                         $query
                             ->whereIn($basePrimaryKey, $orderedIds)
@@ -179,10 +183,8 @@ class OrderByCriteria extends BaseCriteria implements CriteriaContract
     /**
      * @throws Exception
      */
-    #[ArrayShape([0 => Builder::class, 1 => 'string[]', 2 => 'string[]'])]
     public function smartSort(array $options = [], $limit = 30): array
     {
-
         $model = $this->builder->getModel();
 
         $defaultDirection = $options['sort_default_direction'] ?? 'ASC';
@@ -232,12 +234,16 @@ class OrderByCriteria extends BaseCriteria implements CriteriaContract
             $descColumns,
             $orderedIds
         ];
-
     }
 
-    public static function collectionSort(Collection|array $results, $columns = [], $direction = 'ASC'): Collection
+    /**
+     * @param Collection|array $results
+     * @param array $columns
+     * @param string $direction
+     * @return Collection
+     */
+    public static function collectionSort($results, array $columns = [], string $direction = 'ASC'): Collection
     {
-
         $results = is_array($results) ? collect($results) : $results;
 
         foreach ($columns as $column) {
@@ -266,23 +272,14 @@ class OrderByCriteria extends BaseCriteria implements CriteriaContract
         }
 
         return $results;
-
     }
 
     public static function isCollectionSort(Builder $builder, string $column): bool
     {
-
         $relations = explode('.', $column);
 
-        if (
-            (count($relations) === 1 && $builder->getModel()->hasDefinedRelation(implode('.', $relations)) !== false) ||
-            count($relations) > 1
-        ) {
-            return true;
-        }
-
-        return false;
-
+        return (count($relations) === 1 && $builder->getModel()->hasDefinedRelation(implode('.', $relations)) !== false) ||
+            count($relations) > 1;
     }
 
 }

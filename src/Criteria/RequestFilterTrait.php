@@ -5,8 +5,8 @@ namespace CaueSantos\LaravelRequestFilters\Criteria;
 use Exception;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
-use \Illuminate\Http\Request;
-use Schema;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 
 trait RequestFilterTrait
 {
@@ -35,7 +35,6 @@ trait RequestFilterTrait
 
     /**
      * @return array
-     * @throws \Doctrine\DBAL\Exception
      * @throws Exception
      */
     public static function getFilterDefs(): array

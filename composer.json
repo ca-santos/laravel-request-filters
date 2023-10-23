@@ -16,8 +16,9 @@
     }
   ],
   "require": {
-    "php": ">=7.2",
-    "illuminate/support": "^6.0|^7.0|^8.0"
+    "php": "^7.4|^8",
+    "laravel/framework": "^8.0|^9.0|^10.10",
+    "caue-santos/auto-class-discovery": "dev-master"
   },
   "require-dev": {
     "orchestra/testbench": "^4.0|^5.0|^6.0",
@@ -39,7 +40,7 @@
   "extra": {
     "laravel": {
       "providers": [
-        "CaueSantos\\LaravelRequestFilters\\ServiceProvider"
+        "CaueSantos\\LaravelRequestFilters\\RequestFiltersServiceProvider"
       ]
     }
   },
@@ -47,5 +48,14 @@
     "preferred-install": "dist",
     "sort-packages": true,
     "optimize-autoloader": true
-  }
+  },
+  "repositories": [
+    {
+      "type": "path",
+      "url": "../auto-class-dicovery",
+      "options": {
+        "symlink": true
+      }
+    }
+  ]
 }

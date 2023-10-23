@@ -2,12 +2,12 @@
 
 namespace CaueSantos\LaravelRequestFilters;
 
-use Cache;
 use CaueSantos\AutoClassDiscovery\AutoClassDiscovery;
 use Illuminate\Foundation\Support\Providers\RouteServiceProvider;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Route;
 
-class ServiceProvider extends RouteServiceProvider
+class RequestFiltersServiceProvider extends RouteServiceProvider
 {
 
     const CONFIG_PATH = __DIR__ . '/../config/laravel-request-filters.php';
@@ -15,9 +15,13 @@ class ServiceProvider extends RouteServiceProvider
     public function boot()
     {
 
-        $this->publishes([
-            self::CONFIG_PATH => config_path('laravel-request-filters.php'),
-        ], 'config');
+        if ($this->app->runningInConsole()) {
+
+            $this->publishes([
+                self::CONFIG_PATH => config_path('laravel-request-filters.php'),
+            ], 'config');
+
+        }
 
         $modelsFolder = config('laravel-request-filters.models_folder');
         $makeCache = function () use ($modelsFolder) {

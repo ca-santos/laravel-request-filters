@@ -6,6 +6,7 @@ use Exception;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use \Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 
 /**
  * @mixin Builder
@@ -14,7 +15,7 @@ class BaseCriteria extends Builder
 {
 
     protected Builder $builder;
-    protected Request $request;
+    protected Request|Collection $request;
     protected ModelCriteriaContract $criteriaConfig;
 
     protected array $defaultCriteria = [
@@ -26,7 +27,7 @@ class BaseCriteria extends Builder
      * @param Request $request
      * @param $modelCriteria
      */
-    public function __construct(Builder $model, Request $request, $modelCriteria)
+    public function __construct(Builder $model, Request|Collection $request, $modelCriteria)
     {
         parent::__construct($model->getQuery());
         $this->builder = $model;

@@ -2,7 +2,6 @@
 
 namespace CaueSantos\LaravelRequestFilters\Criteria;
 
-use App\Core\Eloquent;
 use Exception;
 use Illuminate\Container\Container;
 use Illuminate\Contracts\Container\BindingResolutionException;
@@ -64,14 +63,14 @@ class ApplyCriteria
 
         $builder = self::applyCriteria($modelCriteria, $builder, true);
         $model = $builder->getModel();
-
+        $builder->ddRawSql();
         $page = Paginator::resolveCurrentPage();
         $perPage = $options['per_page'] ?? request()->query('per_page', 30);
 
         $orderCriteria = new OrderByCriteria($builder, request(), $modelCriteria);
         $smartSort = $orderCriteria->smartSort($options, $perPage);
         $builder = $smartSort[0];
-
+dd($builder->toSql());
         $results = ($total = $builder->toBase()->getCountForPagination())
             ? $builder->forPage($page, $perPage)->get('*')
             : $builder->getModel()->newCollection();

@@ -1,9 +1,10 @@
 <?php
 
-use App\Models\Incident;
 use CaueSantos\AutoClassDiscovery\AutoClassDiscovery;
 use CaueSantos\LaravelRequestFilters\Criteria\RequestFilterTrait;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Route;
 
 if(!function_exists('laravelRequestFiltersDiscoveredLoadAll')){
     function laravelRequestFiltersDiscoveredLoadAll(): array
@@ -12,6 +13,10 @@ if(!function_exists('laravelRequestFiltersDiscoveredLoadAll')){
         $models = Cache::get('laravel-request-filters-discovered');
 
         $modelsWithFilters = [];
+        /**
+         * @var RequestFilterTrait $name
+         * @var  $item
+         */
         foreach ($models['class'] as $name => $item) {
             if (isset($item['parent'][Model::class]) && isset($item['traits'][RequestFilterTrait::class])) {
                 $modelsWithFilters[] = $name::getFilterDefs();
@@ -40,11 +45,5 @@ Route::get('/metadata/{entity}', function ($entity) {
     return response([
         'data' => $values[0] ?? null
     ]);
-
-});
-
-Route::get('/test', function(){
-
-    dd(\App\Models\Practitioner::smartPagination());
 
 });
