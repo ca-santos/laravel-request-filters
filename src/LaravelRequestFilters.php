@@ -2,7 +2,4 @@
 
 namespace CaueSantos\LaravelRequestFilters;
 
-class LaravelRequestFilters
-{
-
-}
+class LaravelRequestFilters {}

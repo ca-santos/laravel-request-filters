@@ -1,82 +1,85 @@
 <?php
 
+declare(strict_types=1);
+
 namespace CaueSantos\LaravelRequestFilters\Criteria;
 
+use CaueSantos\LaravelRequestFilters\Contracts\CriteriaContract;
+use CaueSantos\LaravelRequestFilters\Support\ColumnResolver;
+use CaueSantos\LaravelRequestFilters\Support\RelationIntrospector;
 use Illuminate\Database\Eloquent\Builder;
 
+/**
+ * Column projection: `select=field,relation.field,relation.nested.field`.
+ *
+ * A relation field is loaded through a constrained eager-load (`with([$relation
+ * => fn ($q) => $q->select(...)])`), so Eloquent can still hydrate it. Every
+ * relation whose columns are requested automatically also selects whatever
+ * key(s) Eloquent needs to match parents back to children - a belongsTo's
+ * foreign key on the local table, or a hasOne/hasMany's foreign key and a
+ * belongsToMany's related key on the related table - so a selective `select`
+ * never silently breaks relation hydration.
+ */
 class SelectCriteria extends BaseCriteria implements CriteriaContract
 {
-
-    /**
-     * @throws \Exception
-     */
-    function apply(): Builder
+    public function apply(): Builder
     {
-        $selectsFromQuery = $this->request->get('select', []);
-        $selectsOriginal = explode(',', $selectsFromQuery);
-        $selects = $selectsOriginal;
-        $this->checkFields($selects, 'selectable');
+        $fields = array_values(array_filter(explode(',', (string) $this->request->get('select', ''))));
 
-        $selectsNoRelation = array_filter($selectsOriginal, function ($item) {
-            return !str_contains($item, '.');
-        });
+        $this->checkFields($fields, 'selectable');
 
-        $selectsNoRelation = empty($selectsNoRelation) ? '*' : $selectsNoRelation;
+        $model = $this->builder->getModel();
+        $local = [];
+        $byRelation = [];
 
-        $this->builder = $this->getRelationFields($selects, $selectsNoRelation);
+        foreach ($fields as $field) {
+            if (!str_contains($field, '.')) {
+                $local[] = ColumnResolver::columnNamePolicy($field);
 
-        return $this->builder;
-    }
-
-    function getRelationFields($requestFields, $selectsNoRelation): Builder
-    {
-
-        $relations = [];
-
-        foreach ($requestFields as $field) {
-
-            $explodedField = explode('.', $field);
-
-            if (isset($explodedField[1])) {
-
-                $selectField = array_pop($explodedField);
-                $relation = implode('.', $explodedField);
-
-                if (!isset($relations[$relation])) {
-                    $relations[$relation] = ['id'];
-                }
-
-                $relations[$relation][] = $selectField;
-
+                continue;
             }
 
+            if (!$this->checkRelationAllowed($field)) {
+                continue;
+            }
+
+            $relation = ColumnResolver::dotRelations($field, true);
+            $column = ColumnResolver::columnNamePolicy(ColumnResolver::getColumnFromDottedRelation($field));
+            $byRelation[$relation][] = $column;
         }
 
-        foreach ($relations as $relation => $fields) {
+        foreach ($byRelation as $relation => $columns) {
+            $chain = RelationIntrospector::resolveChain($model, $relation);
 
-            $relatedModelData = $this->builder->getModel()->hasDefinedRelation($relation);
-            $byEager = $this->builder->with($relation)->getEagerLoads();
+            if ($chain === null) {
+                continue;
+            }
 
-            if ($relatedModelData !== false) {
+            $lastHop = $chain[array_key_last($chain)];
+            $extraKeys = array_unique(array_filter([$lastHop->relatedKey]));
 
-                $relatedModel = new $relatedModelData['model']();
+            // Eager-load constraint closures receive the underlying Relation
+            // instance (not a plain Builder), but it proxies query methods
+            // like select() via __call().
+            $this->builder = $this->builder->with([
+                $relation => function ($query) use ($columns, $extraKeys) {
+                    $query->select(array_values(array_unique([...$extraKeys, ...$columns])));
+                },
+            ]);
 
-                $this->builder = $this->builder->with($relation, function ($query) use ($fields, $relatedModel) {
-                    $fields = array_merge($fields, $relatedModel->getForeignKeys());
-                    $query->select($fields);
-                });
-
-                $selectsNoRelation[] = $relatedModelData['foreign_key'];
-
-            } else {
-                dd($this->builder->getRelation($relation));
+            if (!$lastHop->isReverseForeignKey && !$lastHop->isPivoted()) {
+                // belongsTo-style: the FK lives on the *local* side of the last hop.
+                $local[] = $lastHop->foreignKey;
             }
         }
 
-        $this->builder = $this->builder->select($selectsNoRelation);
+        if (!empty($local)) {
+            $table = $model->getTable();
+            $local[] = $model->getKeyName();
+            $selects = array_map(fn ($c) => "{$table}.{$c}", array_unique($local));
+            $this->builder = $this->builder->select($selects);
+        }
 
         return $this->builder;
-
     }
-
 }

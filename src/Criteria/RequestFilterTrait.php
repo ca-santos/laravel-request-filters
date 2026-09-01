@@ -1,89 +1,72 @@
 <?php
 
+declare(strict_types=1);
+
 namespace CaueSantos\LaravelRequestFilters\Criteria;
 
-use Exception;
+use CaueSantos\LaravelRequestFilters\Contracts\ModelCriteria;
+
+use CaueSantos\LaravelRequestFilters\Support\RelationIntrospector;
+use CaueSantos\LaravelRequestFilters\Support\SchemaIntrospector;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Schema;
+use InvalidArgumentException;
 
+/**
+ * Add this trait (and implement {@see self::criteria()}) to any Eloquent
+ * model to make it filterable through {@see ApplyCriteria}.
+ */
 trait RequestFilterTrait
 {
-
-    protected static ?Request $request;
-
-    public function newEloquentBuilder($builder): Builder
-    {
-        return new RequestFilterBuilder($builder);
-    }
-
     /**
-     * @param class-string<ModelCriteriaContract> $modelCriteria
-     * @return Builder
-     * @throws Exception
+     * @param  string|ModelCriteria  $modelCriteria
+     *
+     * @throws InvalidArgumentException
      */
-    public static function applyCriteria(string $modelCriteria): Builder
+    public static function applyCriteria(string|ModelCriteria $modelCriteria): Builder
     {
         return ApplyCriteria::applyCriteria($modelCriteria, static::query());
     }
 
+    /** Relation-aware sort using the current request's `order` parameter and this model's own criteria. */
     public static function sort(): Builder
     {
-        return ApplyCriteria::sort(static::query());
+        return ApplyCriteria::sort(static::query(), static::criteria());
     }
 
     /**
-     * @return array
-     * @throws Exception
+     * @throws InvalidArgumentException
      */
     public static function getFilterDefs(): array
     {
-
-        /**
-         * @var Model $model
-         */
+        /** @var Model $model */
         $model = static::query()->getModel();
 
         $criteriaClass = self::criteria();
 
-        if (!class_exists($criteriaClass))
-            throw new Exception($criteriaClass . ' is not a valid criteria class');
+        if (is_string($criteriaClass) && !class_exists($criteriaClass)) {
+            throw new InvalidArgumentException($criteriaClass.' is not a valid criteria class');
+        }
 
-        /**
-         * @var ModelCriteriaContract $modelCriteria
-         */
-        $modelCriteria = new $criteriaClass();
-
-        $columnsMap = array_map(function ($item) {
-            return [
-                'field' => $item->getName(),
-                'type' => $item->getType()->getName(),
-                'length' => $item->getLength(),
-                'default' => $item->getDefault(),
-                'fixed' => $item->getFixed(),
-            ];
-        }, Schema::getConnection()->getDoctrineSchemaManager()->listTableColumns($model->getTable()));
+        $modelCriteria = is_string($criteriaClass) ? new $criteriaClass : $criteriaClass;
 
         return [
-            'model' => get_class($model),
+            'model' => $model::class,
             'table' => $model->getTable(),
             'fillable' => [$model->getKeyName(), ...$model->getFillable()],
             'attributes' => $model->getAttributes(),
-            'columns' => array_values($columnsMap),
+            'columns' => SchemaIntrospector::columns($model->getTable(), $model->getConnectionName()),
             'allowed' => [
                 'filterable' => $modelCriteria->filterable(),
                 'orderable' => $modelCriteria->orderable(),
-                'selectable' => $modelCriteria->selectable()
-            ]
+                'selectable' => $modelCriteria->selectable(),
+                'relatable' => $modelCriteria->relatable(),
+            ],
+            'relations' => collect(RelationIntrospector::discoverAll($model))
+                ->map(fn ($info) => $info->relatedModel),
         ];
-
     }
 
-    /**
-     * @return class-string<Model>
-     */
-    public abstract static function criteria(): string;
-
+    /** @return string|ModelCriteria a criteria class-string, or an already-configured instance */
+    abstract public static function criteria(): string|ModelCriteria;
 }
-

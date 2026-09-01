@@ -10,5 +10,4 @@ class LaravelRequestFilters extends Facade
     {
         return 'laravel-request-filters';
     }
-
 }

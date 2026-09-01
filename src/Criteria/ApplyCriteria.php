@@ -1,36 +1,52 @@
 <?php
 
+declare(strict_types=1);
+
 namespace CaueSantos\LaravelRequestFilters\Criteria;
 
-use Exception;
-use Illuminate\Container\Container;
-use Illuminate\Contracts\Container\BindingResolutionException;
+use CaueSantos\LaravelRequestFilters\Contracts\ModelCriteria;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Pagination\LengthAwarePaginator;
-use Illuminate\Pagination\Paginator;
-use Illuminate\Support\Str;
+use Illuminate\Support\Collection;
+use InvalidArgumentException;
 
+/**
+ * The pipeline orchestrator: given a model criteria and a builder, inspects
+ * the current request for `complexFilters`, `filters`, `select`, `count` and
+ * `order` and applies whichever stages are present, in that order.
+ */
 class ApplyCriteria
 {
-
     /**
-     * @param $modelCriteria
-     * @param Builder $builder
-     * @param bool $skipOrder
-     * @return Builder
-     * @throws Exception
+     * @param  string|ModelCriteria  $modelCriteria
+     *
+     * @throws InvalidArgumentException
      */
-    public static function applyCriteria($modelCriteria, Builder $builder, bool $skipOrder = false): Builder
-    {
-        if (in_array(ModelCriteriaContract::class, class_implements($modelCriteria)) === false) {
-            throw new Exception($modelCriteria . ' doesn\'t implements ' . ModelCriteriaContract::class);
+    public static function applyCriteria(
+        string|ModelCriteria $modelCriteria,
+        Builder $builder,
+        bool $skipOrder = false,
+        array|Collection $filters = []
+    ): Builder {
+        if (!in_array(ModelCriteria::class, class_implements($modelCriteria) ?: [], true)) {
+            $name = is_object($modelCriteria) ? $modelCriteria::class : $modelCriteria;
+
+            throw new InvalidArgumentException($name.' doesn\'t implement '.ModelCriteria::class);
         }
 
+        $filters = collect($filters);
+
         $request = request();
+        if ($filters->isNotEmpty()) {
+            $request->query->add($filters->toArray());
+        }
+
         $query = $request->query();
 
-        if (isset($query['filter'])) {
+        if (isset($query['complexFilters'])) {
+            $builder = (new ComplexFilterCriteria($builder, $request, $modelCriteria))->apply();
+        }
+
+        if (isset($query['filters'])) {
             $builder = (new FilterCriteria($builder, $request, $modelCriteria))->apply();
         }
 
@@ -47,48 +63,11 @@ class ApplyCriteria
         }
 
         return $builder;
-
     }
 
-    /**
-     * @param $modelCriteria
-     * @param Builder $builder
-     * @param array $options
-     * @return array
-     * @throws BindingResolutionException
-     * @throws Exception
-     */
-    public static function smartPagination($modelCriteria, Builder $builder, array $options = []): array
+    /** Relation-aware sort with a sensible default, using the current request's `order` parameter. */
+    public static function sort(Builder $builder, string|ModelCriteria $modelCriteria = DefaultCriteria::class): Builder
     {
-
-        $builder = self::applyCriteria($modelCriteria, $builder, true);
-        $model = $builder->getModel();
-        $builder->ddRawSql();
-        $page = Paginator::resolveCurrentPage();
-        $perPage = $options['per_page'] ?? request()->query('per_page', 30);
-
-        $orderCriteria = new OrderByCriteria($builder, request(), $modelCriteria);
-        $smartSort = $orderCriteria->smartSort($options, $perPage);
-        $builder = $smartSort[0];
-dd($builder->toSql());
-        $results = ($total = $builder->toBase()->getCountForPagination())
-            ? $builder->forPage($page, $perPage)->get('*')
-            : $builder->getModel()->newCollection();
-
-        $results = $orderCriteria::collectionSort($results, $smartSort[1]);
-        $results = $orderCriteria::collectionSort($results, $smartSort[2], 'DESC');
-
-        return Container::getInstance()->makeWith(LengthAwarePaginator::class, [
-            'items' => array_values($results->toArray()),
-            'total' => $total,
-            'perPage' => $perPage,
-            'page' => $page,
-            'options' => [
-                'path' => Paginator::resolveCurrentPath(),
-                'pageName' => 'page',
-            ]
-        ])->toArray();
-
+        return (new OrderByCriteria($builder, request(), $modelCriteria))->smartSort();
     }
-
 }

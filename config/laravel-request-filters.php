@@ -2,6 +2,6 @@
 
 return [
 
-    'models_folder' => app_path('Models')
+    'models_folder' => app_path('Models'),
 
 ];

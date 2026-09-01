@@ -1,49 +1,28 @@
 <?php
 
+declare(strict_types=1);
+
 namespace CaueSantos\LaravelRequestFilters\Criteria;
 
-use Exception;
-use Illuminate\Contracts\Container\BindingResolutionException;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Schema;
+use CaueSantos\LaravelRequestFilters\Contracts\ModelCriteria;
 
+use Illuminate\Database\Eloquent\Builder;
+use InvalidArgumentException;
+
+/**
+ * Instance-method variant of {@see RequestFilterTrait}, for classes that are
+ * themselves an Eloquent {@see Builder} (e.g. a custom query builder) rather
+ * than a {@see \Illuminate\Database\Eloquent\Model}.
+ */
 trait RequestFilterTrait2
 {
-
-    protected static ?Request $request;
-
     /**
-     * @param class-string<ModelCriteriaContract> $modelCriteria
-     * @return Builder
-     * @throws Exception
+     * @param  string|ModelCriteria|null  $modelCriteria
+     *
+     * @throws InvalidArgumentException
      */
-    public function applyCriteria(string $modelCriteria = null): Builder
+    public function applyCriteria(string|ModelCriteria|null $modelCriteria = null): Builder
     {
-        $modelCriteria = $modelCriteria ?? DefaultCriteria::class;
-        return ApplyCriteria::applyCriteria($modelCriteria, $this);
+        return ApplyCriteria::applyCriteria($modelCriteria ?? DefaultCriteria::class, $this);
     }
-
-    /**
-     * @param string|null $modelCriteria
-     * @param array $paginationOptions
-     * @return array
-     * @throws BindingResolutionException
-     */
-    public function smartPagination(string $modelCriteria = null, array $paginationOptions = []): array
-    {
-        $modelCriteria = $modelCriteria ?? DefaultCriteria::class;
-        return ApplyCriteria::smartPagination($modelCriteria, $this, $paginationOptions);
-    }
-
-    /**
-     * @return Builder
-     */
-    public function sort(): Builder
-    {
-        return ApplyCriteria::sort($this);
-    }
-
 }
-

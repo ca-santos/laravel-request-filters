@@ -1,12 +1,15 @@
 <?php
 
+declare(strict_types=1);
+
 namespace CaueSantos\LaravelRequestFilters\Criteria;
 
-use Illuminate\Database\Eloquent\Builder;
+use CaueSantos\LaravelRequestFilters\Contracts\CriteriaContract as BaseCriteriaContract;
 
-interface CriteriaContract
+/**
+ * @deprecated kept for backward compatibility - implement
+ *             {@see \CaueSantos\LaravelRequestFilters\Contracts\CriteriaContract} directly instead.
+ */
+interface CriteriaContract extends BaseCriteriaContract
 {
-
-    function apply(): Builder;
-
 }

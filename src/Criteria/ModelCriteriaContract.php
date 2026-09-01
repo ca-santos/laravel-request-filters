@@ -1,18 +1,18 @@
 <?php
 
+declare(strict_types=1);
+
 namespace CaueSantos\LaravelRequestFilters\Criteria;
 
-use Illuminate\Database\Eloquent\Model;
+use CaueSantos\LaravelRequestFilters\Contracts\ModelCriteria;
 
-interface ModelCriteriaContract
+/**
+ * @deprecated kept for backward compatibility - implement {@see ModelCriteria}
+ *             (optionally with {@see \CaueSantos\LaravelRequestFilters\Contracts\ExtendedModelCriteria})
+ *             directly instead. This interface adds nothing on top of it; it
+ *             exists only so existing `implements ModelCriteriaContract`
+ *             classes keep working unmodified.
+ */
+interface ModelCriteriaContract extends ModelCriteria
 {
-
-    function filterable(): array;
-
-    function orderable(): array;
-
-    function selectable(): array;
-
-    function relatable(): array;
-
 }
