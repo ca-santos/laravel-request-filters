@@ -51,6 +51,28 @@ class FilterTest extends TestCase
         $this->assertCount(1, $this->filtered(['age:lt' => '25']));
     }
 
+    public function test_numeric_looking_value_in_a_text_column_is_not_miscast(): void
+    {
+        // `status` is a varchar column - a numeric-looking value stored in
+        // it (e.g. a status code) must be compared as the string it is, not
+        // silently coerced to a number just because it looks like one.
+        $this->makeUser(['first_name' => 'Numeric', 'status' => '42']);
+        $this->makeUser(['first_name' => 'Other', 'status' => 'active']);
+
+        $this->assertCount(1, $this->filtered(['status:eq' => '42']));
+        $this->assertCount(1, $this->filtered(['status:in' => '42,99']));
+    }
+
+    public function test_zero_padded_value_against_a_real_integer_column_is_still_cast_numerically(): void
+    {
+        // `age` is a real integer column - unlike the generic heuristic
+        // (which preserves a leading zero defensively for an unknown
+        // column), a known-numeric column should still compare numerically.
+        $this->makeUser(['first_name' => 'Padded', 'age' => 7]);
+
+        $this->assertCount(1, $this->filtered(['age:eq' => '007']));
+    }
+
     public function test_contains(): void
     {
         $this->makeUser(['email' => 'alice@example.com']);

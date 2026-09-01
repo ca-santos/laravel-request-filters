@@ -11,8 +11,8 @@ use InvalidArgumentException;
 
 /**
  * The pipeline orchestrator: given a model criteria and a builder, inspects
- * the current request for `complexFilters`, `filters`, `select`, `count` and
- * `order` and applies whichever stages are present, in that order.
+ * the current request for `complexFilters`, `filters`, `q`, `select`, `count`
+ * and `order` and applies whichever stages are present, in that order.
  */
 class ApplyCriteria
 {
@@ -48,6 +48,10 @@ class ApplyCriteria
 
         if (isset($query['filters'])) {
             $builder = (new FilterCriteria($builder, $request, $modelCriteria))->apply();
+        }
+
+        if (isset($query['q'])) {
+            $builder = (new SearchCriteria($builder, $request, $modelCriteria))->apply();
         }
 
         if (isset($query['select'])) {

@@ -84,4 +84,26 @@ class ComplexFilterTest extends TestCase
         $names = $results->pluck('first_name')->sort()->values()->all();
         $this->assertSame(['Alice', 'Carl'], $names);
     }
+
+    public function test_concat_modifier_across_a_relations_columns(): void
+    {
+        // Regression guard: the multi-column ("concat" modifier) leaf whose
+        // columns belong to a relation used to fatal with a "call to
+        // undefined method" - relationPathExists() was private in the
+        // parent class, unreachable from this subclass.
+        $company = $this->makeCompany(['name' => 'Acme Corp']);
+        $other = $this->makeCompany(['name' => 'Globex']);
+        $this->makeUser(['first_name' => 'Alice', 'company_id' => $company->id]);
+        $this->makeUser(['first_name' => 'Bob', 'company_id' => $other->id]);
+
+        $results = $this->filtered([
+            'logic' => 'and',
+            'filters' => [
+                ['column' => 'company.name,company.name', 'operator' => 'contains', 'modifier' => 'concat', 'value' => 'Acme'],
+            ],
+        ]);
+
+        $this->assertCount(1, $results);
+        $this->assertSame('Alice', $results->first()->first_name);
+    }
 }

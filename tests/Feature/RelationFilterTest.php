@@ -28,6 +28,23 @@ class RelationFilterTest extends TestCase
         $this->assertSame('Alice', $filtered->first()->first_name);
     }
 
+    public function test_numeric_looking_value_in_a_relation_text_column_is_not_miscast(): void
+    {
+        $alice = $this->makeUser(['first_name' => 'Alice']);
+        $bob = $this->makeUser(['first_name' => 'Bob']);
+        $this->makePost($alice, ['title' => '42']);
+        $this->makePost($bob, ['title' => 'Ordinary post']);
+
+        $results = (new FilterCriteria(
+            User::query(),
+            collect(['filters' => ['posts.title:eq' => '42']]),
+            User::criteria()
+        ))->apply()->get();
+
+        $this->assertCount(1, $results);
+        $this->assertSame('Alice', $results->first()->first_name);
+    }
+
     public function test_has_many_relation_filter(): void
     {
         $alice = $this->makeUser(['first_name' => 'Alice']);

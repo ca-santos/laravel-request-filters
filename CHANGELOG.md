@@ -4,6 +4,33 @@ All notable changes to `laravel-request-filters` are documented here. The
 format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.2.0] - 2026-09-01
+
+### Added
+- Full-text search: `?q=term` matches any of the criteria's `searchable()`
+  fields (an OR-ed `contains` across all of them) - plain columns, computed
+  fields, and dotted relation paths are all supported, resolved the same way
+  a `filters[field:contains]` condition on that field already would be. Opt
+  in per model with `CriteriaBuilder::setSearchable([...])`; a criteria class
+  that doesn't implement the new `SearchableModelCriteria` contract, or
+  declares nothing searchable, is left untouched by `q`.
+- Column-type-aware value casting: a filter value is now cast according to
+  the real database column it's being compared against (via
+  `SchemaIntrospector`), not just the value's own shape - a numeric-*looking*
+  value in a text column (a status code, a zero-padded reference) is no
+  longer silently coerced into a number just because it looks like one, while
+  a value against a genuinely numeric column is still cast precisely. Applies
+  to plain and single-relation columns; computed fields, counters, and custom
+  filters are unaffected. Falls back to the previous generic heuristic
+  whenever the real type can't be determined or isn't one of the ones this
+  recognises.
+
+### Fixed
+- `ComplexFilterCriteria`'s multi-column ("concat" modifier) leaf fataled
+  with "call to undefined method" whenever its columns belonged to a
+  relation - `relationPathExists()` was `private` on the parent class,
+  unreachable from that subclass. This code path had no prior test coverage.
+
 ## [1.1.0] - 2026-09-01
 
 ### Added
@@ -126,6 +153,7 @@ that were never part of a published release before.
 - `RequestFilterTrait::sort()` called an undefined `ApplyCriteria::sort()`
   and always threw; `ApplyCriteria::sort()` now exists and works.
 
+[1.2.0]: https://github.com/ca-santos/laravel-request-filters/releases/tag/v1.2.0
 [1.1.0]: https://github.com/ca-santos/laravel-request-filters/releases/tag/v1.1.0
 [1.0.1]: https://github.com/ca-santos/laravel-request-filters/releases/tag/v1.0.1
 [1.0.0]: https://github.com/ca-santos/laravel-request-filters/releases/tag/v1.0.0

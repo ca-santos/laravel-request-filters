@@ -22,6 +22,40 @@ class SupportTest extends TestCase
         $this->assertNull(Values::convertValue(null));
     }
 
+    public function test_cast_for_column_type_uses_the_real_column_type_instead_of_guessing(): void
+    {
+        // The whole point: a numeric-*looking* value in a text column (a
+        // status code, a zero-padded reference) is no longer coerced to a
+        // number just because it looks like one.
+        $this->assertSame('42', Values::castForColumnType('42', 'varchar'));
+        $this->assertSame('0123', Values::castForColumnType('0123', 'varchar'));
+        $this->assertSame(['1', '2'], Values::castForColumnType(['1', '2'], 'text'));
+
+        $this->assertSame(42, Values::castForColumnType('42', 'integer'));
+        $this->assertSame(42, Values::castForColumnType('0042', 'bigint')); // a real int column: leading zeros don't matter
+        $this->assertSame([1, 2], Values::castForColumnType(['1', '2'], 'int'));
+
+        $this->assertSame(4.5, Values::castForColumnType('4.5', 'decimal'));
+        $this->assertSame(4.5, Values::castForColumnType('4.5', 'numeric'));
+
+        $this->assertTrue(Values::castForColumnType('true', 'boolean'));
+        $this->assertFalse(Values::castForColumnType('false', 'boolean'));
+        $this->assertFalse(Values::castForColumnType('0', 'bool'));
+    }
+
+    public function test_cast_for_column_type_falls_back_to_the_generic_heuristic(): void
+    {
+        // Unknown/unmapped type (dates are intentionally left to the
+        // dedicated date-handling code elsewhere).
+        $this->assertSame('2024-01-01', Values::castForColumnType('2024-01-01', 'date'));
+        // No type available at all (computed field, unresolvable column, ...).
+        $this->assertSame(5, Values::castForColumnType('5', null));
+        $this->assertSame('0123', Values::castForColumnType('0123', null));
+        // A value that doesn't fit the bucket's shape falls back rather than
+        // being left as a broken raw string ("true" bound against an int column).
+        $this->assertTrue(Values::castForColumnType('true', 'integer'));
+    }
+
     public function test_sanitize_value_strips_control_characters(): void
     {
         $this->assertSame("hello", Values::sanitizeValue("hello\x00\x01"));

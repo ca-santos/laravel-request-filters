@@ -9,6 +9,7 @@ use CaueSantos\LaravelRequestFilters\Support\ColumnResolver;
 use CaueSantos\LaravelRequestFilters\Support\DateShortcuts;
 use CaueSantos\LaravelRequestFilters\Support\RelationCounter;
 use CaueSantos\LaravelRequestFilters\Support\RelationIntrospector;
+use CaueSantos\LaravelRequestFilters\Support\SchemaIntrospector;
 use CaueSantos\LaravelRequestFilters\Support\Values;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
@@ -203,13 +204,19 @@ abstract class BaseFilterCriteria extends BaseCriteria implements CriteriaContra
      * declared capabilities (custom filter, counter, computed field, relation
      * path, plain column) and apply the condition through whichever mechanism
      * is correct for it.
+     *
+     * `$rawValue` is not yet type-converted - only the plain-column and
+     * relation-column branches know a real database column to cast it
+     * against (see {@see Values::castForColumnType()}); every other branch
+     * falls back to the value-shape heuristic ({@see Values::convertValue()})
+     * exactly as it always has.
      */
     protected function resolveAndApplyField(
         Builder $query,
         string $field,
         string $operatorKey,
         ?string $modifier,
-        array $value,
+        array $rawValue,
         string $boolean = 'and'
     ): void {
         $field = $this->resolveAlias($field);
@@ -217,26 +224,27 @@ abstract class BaseFilterCriteria extends BaseCriteria implements CriteriaContra
         $extended = $this->extendedCriteria();
 
         if ($extended && ($callback = $extended->customFilters()[$field] ?? null)) {
+            $value = Values::convertValue($rawValue);
             $query->where(fn ($q) => $callback($q, $operator, $value[0] ?? $value, $boolean), boolean: $boolean);
 
             return;
         }
 
         if ($extended && ($counter = $extended->counters()[$field] ?? null)) {
-            $this->applyCounter($query, $counter, $operator, $value, $boolean);
+            $this->applyCounter($query, $counter, $operator, Values::convertValue($rawValue), $boolean);
 
             return;
         }
 
         if ($extended && ($computed = $extended->computedFields()[$field] ?? null)) {
             $expression = '('.$computed->resolve($query).')';
-            $this->applyCondition($query, [$expression], $operator, $modifier, $value, $boolean);
+            $this->applyCondition($query, [$expression], $operator, $modifier, Values::convertValue($rawValue), $boolean);
 
             return;
         }
 
         if (str_contains($field, '.')) {
-            $this->applyRelationField($query, $field, $operator, $modifier, $value, $boolean);
+            $this->applyRelationField($query, $field, $operator, $modifier, $rawValue, $boolean);
 
             return;
         }
@@ -245,9 +253,9 @@ abstract class BaseFilterCriteria extends BaseCriteria implements CriteriaContra
             return;
         }
 
-        $column = ColumnResolver::columnNamePolicy($field);
-        $column = $query->qualifyColumn($column);
-        $column = ColumnResolver::resolveJsonPath($column);
+        $columnName = ColumnResolver::columnNamePolicy($field);
+        $column = ColumnResolver::resolveJsonPath($query->qualifyColumn($columnName));
+        $value = Values::castForColumnType($rawValue, SchemaIntrospector::columnType($query->getModel(), $columnName));
 
         $this->applyCondition($query, [$column], $operator, $modifier, $value, $boolean);
     }
@@ -261,7 +269,7 @@ abstract class BaseFilterCriteria extends BaseCriteria implements CriteriaContra
      * `whereHas()`/`whereDoesntHave()`, so no manual join-building is needed
      * for filtering (only sorting needs that - see {@see OrderByCriteria}).
      */
-    private function applyRelationField(Builder $query, string $field, string $operator, ?string $modifier, array $value, string $boolean): void
+    private function applyRelationField(Builder $query, string $field, string $operator, ?string $modifier, array $rawValue, string $boolean): void
     {
         if (!$this->checkRelationAllowed($field)) {
             return;
@@ -270,7 +278,9 @@ abstract class BaseFilterCriteria extends BaseCriteria implements CriteriaContra
         $relationPath = ColumnResolver::dotRelations($field, true);
         $column = ColumnResolver::getColumnFromDottedRelation($field);
 
-        if (!$this->relationPathExists($query->getModel(), $relationPath)) {
+        $chain = RelationIntrospector::resolveChain($query->getModel(), $relationPath);
+
+        if ($chain === null) {
             return;
         }
 
@@ -289,13 +299,17 @@ abstract class BaseFilterCriteria extends BaseCriteria implements CriteriaContra
             return;
         }
 
-        $query->has($relationPath, '>=', 1, $boolean, function (Builder $relatedQuery) use ($column, $operator, $modifier, $value) {
-            $relatedColumn = $relatedQuery->qualifyColumn(ColumnResolver::columnNamePolicy($column));
+        $columnName = ColumnResolver::columnNamePolicy($column);
+        $relatedModel = $chain[array_key_last($chain)]->relatedModel;
+        $value = Values::castForColumnType($rawValue, SchemaIntrospector::columnType(new $relatedModel, $columnName));
+
+        $query->has($relationPath, '>=', 1, $boolean, function (Builder $relatedQuery) use ($columnName, $operator, $modifier, $value) {
+            $relatedColumn = $relatedQuery->qualifyColumn($columnName);
             $this->applyCondition($relatedQuery, [ColumnResolver::resolveJsonPath($relatedColumn)], $operator, $modifier, $value);
         });
     }
 
-    private function relationPathExists(Model $model, string $path): bool
+    protected function relationPathExists(Model $model, string $path): bool
     {
         return RelationIntrospector::resolveChain($model, $path) !== null;
     }

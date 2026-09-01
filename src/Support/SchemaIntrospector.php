@@ -19,6 +19,9 @@ final class SchemaIntrospector
     /** @var array<string, list<string>> */
     private static array $columnNameCache = [];
 
+    /** @var array<string, array<string, ?string>> */
+    private static array $columnTypeCache = [];
+
     /** @return list<string> column names, or an empty array when they can't be determined */
     public static function columnNames(Model $model): array
     {
@@ -35,6 +38,29 @@ final class SchemaIntrospector
         }
 
         return self::$columnNameCache[$key] = $columns;
+    }
+
+    /**
+     * `$model`'s `$column`'s real database type name (e.g. `integer`,
+     * `varchar`, `datetime`), or null when it can't be determined - used to
+     * cast a request value according to the column it's actually being
+     * compared against, see {@see \CaueSantos\LaravelRequestFilters\Support\Values::castForColumnType()}.
+     */
+    public static function columnType(Model $model, string $column): ?string
+    {
+        $key = ($model->getConnectionName() ?? 'default').'.'.$model->getTable();
+
+        if (!isset(self::$columnTypeCache[$key])) {
+            $types = [];
+
+            foreach (self::columns($model->getTable(), $model->getConnectionName()) as $col) {
+                $types[$col['name']] = $col['type'];
+            }
+
+            self::$columnTypeCache[$key] = $types;
+        }
+
+        return self::$columnTypeCache[$key][$column] ?? null;
     }
 
     /**

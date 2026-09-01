@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CaueSantos\LaravelRequestFilters\Criteria;
 
 use CaueSantos\LaravelRequestFilters\Contracts\ExtendedModelCriteria;
+use CaueSantos\LaravelRequestFilters\Contracts\SearchableModelCriteria;
 use CaueSantos\LaravelRequestFilters\Support\ComputedField;
 use CaueSantos\LaravelRequestFilters\Support\RelationCounter;
 use Closure;
@@ -31,7 +32,7 @@ use Closure;
  * (`computed()`, `counter()`, `filterUsing()`, `sortUsing()`, `alias()`) is
  * chainable directly since it has no getter/setter name clash.
  */
-final class CriteriaBuilder implements ExtendedModelCriteria, ModelCriteriaContract
+final class CriteriaBuilder implements SearchableModelCriteria, ModelCriteriaContract
 {
     private array $filterable = ['*'];
 
@@ -40,6 +41,9 @@ final class CriteriaBuilder implements ExtendedModelCriteria, ModelCriteriaContr
     private array $selectable = ['*'];
 
     private array $relatable = ['*'];
+
+    /** @var list<string> */
+    private array $searchable = [];
 
     /** @var array<string, ComputedField> */
     private array $computedFields = [];
@@ -105,6 +109,19 @@ final class CriteriaBuilder implements ExtendedModelCriteria, ModelCriteriaContr
     public function setRelatable(array $fields): static
     {
         $this->relatable = $fields;
+
+        return $this;
+    }
+
+    public function searchable(): array
+    {
+        return $this->searchable;
+    }
+
+    /** Fields (plain columns, computed fields, or dotted relation paths) the `q` search parameter may match against. */
+    public function setSearchable(array $fields): static
+    {
+        $this->searchable = $fields;
 
         return $this;
     }

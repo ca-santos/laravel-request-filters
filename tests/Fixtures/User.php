@@ -31,6 +31,7 @@ class User extends Model
     public static function criteria(): string|ModelCriteriaContract
     {
         return CriteriaBuilder::make()
+            ->setSearchable(['first_name', 'last_name', 'email', 'company.name'])
             ->computed('full_name', fn ($query) => ColumnResolver::concat($query, ['first_name', 'last_name']))
             ->counter('posts_count', 'posts')
             ->counter('published_posts_count', 'posts', fn ($q) => $q->whereNotNull('published_at'))

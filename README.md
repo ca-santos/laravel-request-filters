@@ -47,10 +47,11 @@ return [
 |---|---|
 | `ModelCriteria` | The 4-method whitelist contract every filterable model exposes: `filterable()`, `orderable()`, `selectable()`, `relatable()`. |
 | `ExtendedModelCriteria` | Optional additive contract: `computedFields()`, `counters()`, `customFilters()`, `customSorts()`, `aliases()`. |
-| `CriteriaBuilder` | Fluent, ready-to-use implementation of both contracts above — you'll use this in almost every model. |
+| `SearchableModelCriteria` | Optional additive contract on top of that one: `searchable()`, for the `q` full-text search parameter. |
+| `CriteriaBuilder` | Fluent, ready-to-use implementation of every contract above — you'll use this in almost every model. |
 | `DefaultCriteria` | The "no restrictions" criteria (`['*']` everywhere) — used when a model doesn't define its own. |
 | `RequestFilterTrait` | Add to a model to get `Model::applyCriteria()`, `Model::sort()` and `Model::getFilterDefs()`. |
-| `ApplyCriteria` | The pipeline orchestrator — inspects the current request for `complexFilters`, `filters`, `select`, `count`, `order` and applies whichever are present, in that order. |
+| `ApplyCriteria` | The pipeline orchestrator — inspects the current request for `complexFilters`, `filters`, `q`, `select`, `count`, `order` and applies whichever are present, in that order. |
 
 ## Setting up a model
 
@@ -82,6 +83,8 @@ class User extends Model
             ->setOrderable(['first_name', 'last_name', 'age', 'created_at', 'company.name'])
             ->setSelectable(['*'])
             ->setRelatable(['company', 'posts', 'posts.tags'])
+            // Fields the `q` full-text search parameter may match against.
+            ->setSearchable(['first_name', 'last_name', 'email', 'company.name'])
             // A field whose value is a SQL expression, not a real column.
             ->computed('full_name', fn ($query) => ColumnResolver::concat($query, ['first_name', 'last_name']))
             // A relation-count field, optionally constrained.
@@ -126,12 +129,13 @@ nothing else to wire up per endpoint.
 |---|---|
 | `filters[field:operator:modifier]=value` | Flat filters, implicitly AND-ed together. |
 | `complexFilters` | Arbitrarily nested AND/OR filter tree. |
+| `q` | Full-text search across the criteria's `searchable()` fields. |
 | `select` | Column projection, including relation columns. |
 | `count` | `withCount()` one or more relations. |
 | `order[asc]` / `order[desc]` | Comma-separated columns/relation paths to sort by. |
 
-All five can be combined in the same request; they're applied in the order
-above (`complexFilters` → `filters` → `select` → `count` → `order`).
+All six can be combined in the same request; they're applied in the order
+above (`complexFilters` → `filters` → `q` → `select` → `count` → `order`).
 
 ### Simple filters — `filters`
 
@@ -196,6 +200,27 @@ own children. A leaf's `column` may be a comma-separated list paired with the
 supported when every column is local, or every column belongs to the *same*
 relation path.
 
+### Full-text search — `q`
+
+```
+GET /users?q=wonder
+```
+
+Matches any of the criteria's `searchable()` fields (an OR-ed `contains`
+across all of them) — plain columns, computed fields, and dotted relation
+paths are all supported, resolved the same way a `filters[field:contains]`
+condition on that same field already would be:
+
+```php
+CriteriaBuilder::make()
+    ->setSearchable(['first_name', 'last_name', 'email', 'company.name']);
+```
+
+`searchable()` defaults to an empty list — a criteria class must opt fields
+into it explicitly; `q` has no effect at all on a criteria that doesn't
+implement it (e.g. `DefaultCriteria`) or declares nothing searchable. An
+empty/whitespace-only `q` is also a no-op.
+
 ### Column projection — `select`
 
 ```
@@ -252,6 +277,22 @@ was requested. The plain `OrderByCriteria::apply()` used internally by
 `LIKE` wildcards (`%`, `_`) inside a user-supplied value are always escaped —
 searching for a literal `%` or `_` matches literally, it doesn't become a
 wildcard.
+
+### Value casting
+
+A filter value is cast according to the column it's actually being compared
+against, not just the value's own shape: `filters[status:eq]=42` against a
+`varchar` column compares the literal string `"42"`, while the same value
+against an `integer` column compares the number `42` — a numeric-*looking*
+value (a status code, a zero-padded reference) in a text column is never
+silently coerced into a number just because it looks like one. This applies
+to plain columns and single-relation columns (`company.some_int_column`);
+computed fields, counters, and custom filters are unaffected (their value is
+whatever the generic true/false/number-or-string heuristic already produces,
+same as always). When the real column type can't be
+determined (an unresolvable column, an unsupported database driver) or isn't
+one this recognises (dates are intentionally left alone — see `date_<shortcut>`
+above), that same generic heuristic is used as a fallback.
 
 ## Date shortcuts
 
@@ -472,12 +513,31 @@ GET /companies
     &select=name,users.posts.title
 ```
 
+### 6. Full-text search combined with filters
+
+> "Active adult users whose name, email, or company name contains 'ali'."
+
+```
+GET /users
+    ?q=ali
+    &filters[status:eq]=active
+    &complexFilters[logic]=and
+        &complexFilters[filters][0][column]=age
+        &complexFilters[filters][0][operator]=gte
+        &complexFilters[filters][0][value]=18
+```
+
+`q` is AND-ed with both `filters` and `complexFilters` — it narrows the
+result down further rather than replacing them, exactly like every other
+stage in the pipeline.
+
 ## Security model
 
 - Every value is bound (`where`, `whereIn`, `whereBetween`, parameterised
   `whereRaw(... ? ...)`) — never interpolated into SQL.
 - `LIKE` wildcards in `contains`/`starts`/`ends` values are escaped, with a
-  bound `ESCAPE` character portable across MySQL/SQLite/PostgreSQL.
+  bound `ESCAPE` character portable across MySQL/SQLite/PostgreSQL. `q` reuses
+  this same mechanism per field, so it carries the exact same guarantees.
 - Column/relation names coming from the request are validated against an
   allowed character set and the model's own whitelist before ever reaching a
   raw SQL fragment — an attempt like `order[asc]=id; DROP TABLE users;--` is
