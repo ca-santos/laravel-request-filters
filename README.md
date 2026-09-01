@@ -288,16 +288,13 @@ year; register your own binding in your app's service provider to change it.
   bare alias (SQL doesn't allow referencing a SELECT alias in `WHERE`) — the
   engine always substitutes the resolved expression instead, so
   `filters[full_name:contains]=John Smith` and `order[asc]=full_name` both work.
-- **Relation counters** (`->counter(...)`) are rewritten into a correlated
-  `has($relation, $operator, $count)` existence check rather than comparing
-  the `withCount()` alias directly — `filters[posts_count:gte]=5`,
-  `filters[posts_count:between]=1,10` both work as filters.
-  ⚠️ Unlike computed fields, a counter is **not** substituted when used in
-  `order` — sorting by a counter's name only works once it has been
-  materialized as a real selected column via `count=<relation>` (which
-  produces a real `<relation>_count` column you can then sort by); sorting by
-  an arbitrary counter alias that was never selected will fail with a SQL
-  error ("no such column").
+- **Relation counters** (`->counter(...)`) are rewritten rather than compared/
+  ordered by their bare alias directly: as a filter, into a correlated
+  `has($relation, $operator, $count)` existence check — `filters[posts_count:gte]=5`,
+  `filters[posts_count:between]=1,10` both work; as a sort (`order[asc]=posts_count`),
+  the engine adds the matching `withCount()` subselect itself (reusing one
+  already added by `count=<relation>` or an earlier sort under the same
+  alias, rather than duplicating it) before ordering by it.
 
 ## Aliases and whitelists
 
@@ -399,15 +396,16 @@ GET /users
     &filters[full_name:contains]=Alice
     &select=id,first_name,company.name
     &count=posts
-    &order[asc]=company.name&order[desc]=age
+    &order[desc]=posts_count
 ```
 
 Both `complexFilters` and `filters` are applied (AND-ed together) in the same
 query — the flat `filters[full_name:contains]` narrows the result of the
 nested tree above even further, `select` projects only the requested columns
-(still eager-loading `company` for the requested `company.name`), `count=posts`
-adds a real `posts_count` column, and the final ordering joins `companies`
-(aliased, so it doesn't collide with other joins) and falls back to `age`.
+(still eager-loading `company` for the requested `company.name`), and
+`count=posts` adds a real `posts_count` column that `order[desc]=posts_count`
+then sorts by directly (the engine reuses the same `withCount()` subselect
+`count=` already added, rather than adding a duplicate one).
 
 ### 3. Relation counter `between` combined with a negated `in`
 

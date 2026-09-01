@@ -4,6 +4,21 @@ All notable changes to `laravel-request-filters` are documented here. The
 format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.0.1] - 2026-09-01
+
+### Fixed
+- Sorting by a relation counter (`->counter(...)`, e.g. `order[asc]=posts_count`)
+  previously produced a SQL error ("no such column") unless the exact same
+  column had already been materialized via `count=<relation>`. `OrderByCriteria`
+  now adds the matching `withCount()` subselect itself when needed (reusing
+  one already selected under the same alias by `count=` or an earlier sort,
+  rather than adding a duplicate), so a counter can always be sorted by
+  directly, the same way a computed field already could.
+- Raised the `phpunit/phpunit` floor from `^10.0` to `^10.1`. `orchestra/testbench:8.0.0`
+  allows `phpunit/phpunit` as low as `10.0.7`, a version that predates the
+  `<source>` element `phpunit.xml` uses, which made CI's `prefer-lowest` matrix
+  jobs fail on an invalid-schema warning despite every test passing.
+
 ## [1.0.0] - 2026-09-01
 
 First stable release: `Criteria/*` becomes a single, generic filtering engine
@@ -94,4 +109,5 @@ that were never part of a published release before.
 - `RequestFilterTrait::sort()` called an undefined `ApplyCriteria::sort()`
   and always threw; `ApplyCriteria::sort()` now exists and works.
 
+[1.0.1]: https://github.com/ca-santos/laravel-request-filters/releases/tag/v1.0.1
 [1.0.0]: https://github.com/ca-santos/laravel-request-filters/releases/tag/v1.0.0

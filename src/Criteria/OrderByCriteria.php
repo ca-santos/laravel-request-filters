@@ -9,6 +9,7 @@ use CaueSantos\LaravelRequestFilters\Support\ColumnResolver;
 use CaueSantos\LaravelRequestFilters\Support\RelationInfo;
 use CaueSantos\LaravelRequestFilters\Support\RelationIntrospector;
 use CaueSantos\LaravelRequestFilters\Support\SchemaIntrospector;
+use Illuminate\Contracts\Database\Query\Expression;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
@@ -135,6 +136,26 @@ class OrderByCriteria extends BaseCriteria implements CriteriaContract
                 return $builder->orderByRaw("({$expression} IS NULL) {$direction}, {$expression} {$direction}");
             }
 
+            if ($extended && ($counter = $extended->counters()[$path] ?? null)) {
+                // A counter is a `withCount()` subselect, not a real column - SQL
+                // does not allow qualifying a SELECT alias with the table name in
+                // ORDER BY, so it must stay unqualified (unlike every other case
+                // here). `relation as alias` is Eloquent's own aggregate-aliasing
+                // syntax, so this reuses whatever aggregate the request already
+                // added instead of risking a duplicate subselect under the same
+                // alias.
+                if (!$this->hasAggregateAlias($builder, $path)) {
+                    // withCount()'s `relation as alias => constraint` array form requires
+                    // a callable constraint (unlike the plain string-list form) - substitute
+                    // a no-op when the counter itself has none.
+                    $builder->withCount([$counter->relation.' as '.$path => $counter->constraint ?? static fn ($query) => $query]);
+                }
+
+                $expression = ColumnResolver::escapeColumn($path);
+
+                return $builder->orderByRaw("({$expression} IS NULL) {$direction}, {$expression} {$direction}");
+            }
+
             $column = ColumnResolver::columnNamePolicy($path);
             $isJson = str_contains($column, '->');
             $qualified = $isJson ? ColumnResolver::resolveJsonPath($builder->qualifyColumn(explode('->', $column)[0]).'->'.Str::after($column, '->'))
@@ -144,6 +165,23 @@ class OrderByCriteria extends BaseCriteria implements CriteriaContract
         }
 
         return $this->sortAcrossRelation($builder, $model, $path, $direction);
+    }
+
+    /** Whether the query already selects an aggregate subselect aliased `$alias` (e.g. from `count=` or an earlier sort). */
+    private function hasAggregateAlias(Builder $builder, string $alias): bool
+    {
+        $query = $builder->getQuery();
+        $wrapped = $query->getGrammar()->wrap($alias);
+
+        foreach ((array) $query->columns as $column) {
+            $value = $column instanceof Expression ? $column->getValue($query->getGrammar()) : (string) $column;
+
+            if (str_ends_with(trim((string) $value), 'as '.$wrapped)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function sortAcrossRelation(Builder $builder, Model $model, string $path, string $direction): Builder
