@@ -531,6 +531,165 @@ GET /users
 result down further rather than replacing them, exactly like every other
 stage in the pipeline.
 
+## Showcase: everything at once
+
+The three requests below exist to answer one question: *what does this
+package actually save you from hand-writing?* Each one is a single HTTP
+request a frontend could fire as-is — no controller code, no query-builder
+gymnastics — and each is **exact and verified**: pulled straight out of this
+package's own test suite (not hand-typed prose), where it's asserted against
+real result sets on the `Company → User → Post → Tag` domain used throughout
+this README.
+
+### The kitchen sink
+
+> "Users who are **not** banned or deleted, whose name contains 'Ali' and
+> whose email is an `@acme-corp.test` address, **and** who either (a) work at
+> Acme Corp with at least 2 published posts, or (b) are adults with a post
+> mentioning 'quarterly' — **and**, either way, are between 18 and 65 —
+> ordered by post count then company name, with post counts annotated and
+> only a few columns (plus company name) selected."
+
+Every clause in that sentence is a real, independent piece of this request —
+a 3-level-deep AND/OR/AND logic tree (mixing a relation condition, a
+*constrained* relation counter, and a custom filter), two flat filters (one
+of them a computed field, the other an aliased column), a negated `in`, a
+`between`, column projection through a relation, a `withCount()` annotation,
+and a two-column sort (a real relation join *and* a counter) — all in one
+request, all still safe from SQL injection, all still respecting every
+whitelist:
+
+```json
+{
+    "logic": "and",
+    "filters": [
+        { "column": "status", "operator": "!in", "value": "banned,deleted" },
+        {
+            "logic": "or",
+            "filters": [
+                {
+                    "logic": "and",
+                    "filters": [
+                        { "column": "company.name", "operator": "eq", "value": "Acme Corp" },
+                        { "column": "published_posts_count", "operator": "gte", "value": "2" }
+                    ]
+                },
+                {
+                    "logic": "and",
+                    "filters": [
+                        { "column": "is_adult", "operator": "eq", "value": "1" },
+                        { "column": "posts.title", "operator": "contains", "value": "quarterly" }
+                    ]
+                }
+            ]
+        },
+        { "column": "age", "operator": "between", "value": "18,65" }
+    ]
+}
+```
+
+As a query string — the tree above, plus the two flat filters, `select`,
+`count`, and the two-column `order`, all in one request:
+
+```
+GET /users
+    ?complexFilters[logic]=and
+        &complexFilters[filters][0][column]=status
+        &complexFilters[filters][0][operator]=!in
+        &complexFilters[filters][0][value]=banned,deleted
+        &complexFilters[filters][1][logic]=or
+        &complexFilters[filters][1][filters][0][logic]=and
+        &complexFilters[filters][1][filters][0][filters][0][column]=company.name
+        &complexFilters[filters][1][filters][0][filters][0][operator]=eq
+        &complexFilters[filters][1][filters][0][filters][0][value]=Acme Corp
+        &complexFilters[filters][1][filters][0][filters][1][column]=published_posts_count
+        &complexFilters[filters][1][filters][0][filters][1][operator]=gte
+        &complexFilters[filters][1][filters][0][filters][1][value]=2
+        &complexFilters[filters][1][filters][1][logic]=and
+        &complexFilters[filters][1][filters][1][filters][0][column]=is_adult
+        &complexFilters[filters][1][filters][1][filters][0][operator]=eq
+        &complexFilters[filters][1][filters][1][filters][0][value]=1
+        &complexFilters[filters][1][filters][1][filters][1][column]=posts.title
+        &complexFilters[filters][1][filters][1][filters][1][operator]=contains
+        &complexFilters[filters][1][filters][1][filters][1][value]=quarterly
+        &complexFilters[filters][2][column]=age
+        &complexFilters[filters][2][operator]=between
+        &complexFilters[filters][2][value]=18,65
+    &filters[full_name:contains]=Ali
+    &filters[email_address:ends]=@acme-corp.test
+    &select=id,first_name,company.name
+    &count=posts
+    &order[desc]=posts_count&order[asc]=company.name
+```
+
+The SQL this compiles to (SQLite; MySQL/PostgreSQL use their own quoting but
+the same shape) — a query nobody is hand-writing per endpoint:
+
+```sql
+select "users"."id", "users"."first_name", "users"."company_id",
+       (select count(*) from "posts" where "users"."id" = "posts"."user_id") as "posts_count"
+from "users"
+left join "companies" as "TQkBE_companies" on "users"."company_id" = "TQkBE_companies"."id"
+where (
+    ("users"."status" not in ('banned', 'deleted'))
+    and (
+        (
+            exists (select * from "companies" where "users"."company_id" = "companies"."id" and "companies"."name" = 'Acme Corp')
+            and (select count(*) from "posts" where "users"."id" = "posts"."user_id" and "published_at" is not null) >= 2
+        )
+        or (
+            ("age" >= 18)
+            and exists (select * from "posts" where "users"."id" = "posts"."user_id" and `posts`.`title` LIKE '%quarterly%' ESCAPE '\')
+        )
+    )
+    and ("users"."age" between 18 and 65)
+)
+and (`first_name` || ' ' || `last_name`) LIKE '%Ali%' ESCAPE '\'
+and `users`.`email` LIKE '%@acme-corp.test' ESCAPE '\'
+group by "users"."id"
+order by (`TQkBE_companies`.`name` IS NULL) ASC, `TQkBE_companies`.`name` ASC,
+         (`posts_count` IS NULL) DESC, `posts_count` DESC
+```
+
+(the `TQkBE_` prefix is a random alias the engine generates per-request so a
+join never collides with another one in the same query; the mix of `"..."`
+and `` `...` `` quoting is real too — SQLite's own grammar quotes with `"`,
+while the identifiers *this package* resolves and escapes itself use `` ` ``,
+portable across every driver it supports)
+
+### Date shortcut + full-text-style relation search + counter, combined
+
+> "Posts published in the last 7 days, tagged `php`, whose title mentions
+> 'laravel'."
+
+```
+GET /posts
+    ?filters[published_at:date_last_n_days]=7
+    &filters[tags.name:eq]=php
+    &filters[title:contains]=laravel
+```
+
+One line combines a rolling date window, a `belongsToMany` relation
+condition (through the `post_tag` pivot table), and a plain text search —
+three completely different SQL mechanisms (a bound date range, an `EXISTS`
+subquery through a pivot join, a `LIKE`), selected automatically per field,
+from three lines of query string.
+
+### Three relation hops deep, mixing a "through" relation and a pivot table
+
+> "Companies that have at least one post — reached through their users,
+> a `hasManyThrough` relation — tagged `urgent` — reached through that
+> post's `belongsToMany` tags."
+
+```
+GET /companies?filters[users.posts.tags.name:eq]=urgent
+```
+
+One filter, three relation hops, two different relation *types*
+(`hasMany` → `belongsToMany`, independent of the `hasManyThrough` shortcut
+`Company` also exposes directly for reads) — resolved by calling the real
+relation methods on each model in turn, never a hand-maintained join map.
+
 ## Security model
 
 - Every value is bound (`where`, `whereIn`, `whereBetween`, parameterised
