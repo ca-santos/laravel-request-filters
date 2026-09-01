@@ -4,6 +4,23 @@ All notable changes to `laravel-request-filters` are documented here. The
 format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.1.0] - 2026-09-01
+
+### Added
+- Authorization for the `/filters/metadata` routes. They describe a model's
+  real columns, relations, and attributes, and were previously reachable by
+  any caller with no protection at all. They now respond `403` unless
+  `app()->environment('local', 'testing')` is true; call
+  `RequestFiltersServiceProvider::auth(fn ($request) => ...)` from your own
+  service provider to allow (or further restrict) them, and/or list
+  middleware classes under `config('laravel-request-filters.metadata_middleware')`
+  to layer additional middleware (auth guards, rate limiting, ...) on top.
+
+  **Potentially breaking**: an application that relied on calling
+  `/filters/metadata` outside a local/testing environment with no
+  authorization at all will now get `403` there until it calls
+  `RequestFiltersServiceProvider::auth(...)`.
+
 ## [1.0.1] - 2026-09-01
 
 ### Fixed
@@ -109,5 +126,6 @@ that were never part of a published release before.
 - `RequestFilterTrait::sort()` called an undefined `ApplyCriteria::sort()`
   and always threw; `ApplyCriteria::sort()` now exists and works.
 
+[1.1.0]: https://github.com/ca-santos/laravel-request-filters/releases/tag/v1.1.0
 [1.0.1]: https://github.com/ca-santos/laravel-request-filters/releases/tag/v1.0.1
 [1.0.0]: https://github.com/ca-santos/laravel-request-filters/releases/tag/v1.0.0

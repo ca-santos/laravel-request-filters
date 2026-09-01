@@ -333,6 +333,31 @@ Each entry is the same shape `Model::getFilterDefs()` returns:
 ]
 ```
 
+### Authorizing access to it
+
+These routes describe a model's real columns, relations, and attributes -
+not something every application wants exposed to any caller. By default
+they're only reachable when `app()->environment('local', 'testing')` is
+true; anywhere else they respond `403`. To allow (or further restrict) them,
+register your own check from a service provider's `boot()`:
+
+```php
+use CaueSantos\LaravelRequestFilters\RequestFiltersServiceProvider;
+
+RequestFiltersServiceProvider::auth(function ($request) {
+    return $request->user()?->isAdmin() ?? false;
+});
+```
+
+To layer additional middleware (auth guards, rate limiting, ...) on top of
+that check instead of replacing it, list middleware **classes** (not
+closures) in the config:
+
+```php
+// config/laravel-request-filters.php
+'metadata_middleware' => ['auth:sanctum'],
+```
+
 ## Complex query examples
 
 These are exact, verified requests against the `Company (hasMany) → User
