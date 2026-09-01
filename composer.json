@@ -1,0 +1,59 @@
+{
+  "name": "caue-santos/laravel-request-filters",
+  "description": "A laravel request filters",
+  "license": "MIT",
+  "keywords": [
+    "laravel",
+    "request",
+    "filters"
+  ],
+  "homepage": "https://github.com/ca-santos/laravel-request-filters",
+  "type": "library",
+  "authors": [
+    {
+      "name": "Caue Santos",
+      "email": "cauesantosre4@gmail.com"
+    }
+  ],
+  "support": {
+    "issues": "https://github.com/ca-santos/laravel-request-filters/issues",
+    "source": "https://github.com/ca-santos/laravel-request-filters"
+  },
+  "require": {
+    "php": "^8.2",
+    "laravel/framework": "^10.10|^11.0",
+    "caue-santos/auto-class-discovery": "^1.0"
+  },
+  "suggest": {
+    "doctrine/dbal": "Only needed for column metadata on Laravel <11, which lacks the native Schema::getColumns()."
+  },
+  "require-dev": {
+    "orchestra/testbench": "^8.0|^9.0",
+    "phpunit/phpunit": "^10.0|^11.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "CaueSantos\\LaravelRequestFilters\\": "src"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "CaueSantos\\LaravelRequestFilters\\Tests\\": "tests"
+    }
+  },
+  "scripts": {
+    "phpunit": "phpunit"
+  },
+  "extra": {
+    "laravel": {
+      "providers": [
+        "CaueSantos\\LaravelRequestFilters\\RequestFiltersServiceProvider"
+      ]
+    }
+  },
+  "config": {
+    "preferred-install": "dist",
+    "sort-packages": true,
+    "optimize-autoloader": true
+  }
+}

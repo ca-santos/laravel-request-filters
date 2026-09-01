@@ -1,0 +1,10 @@
+/vendor
+/.idea
+/node_modules
+/composer.lock
+/.phpunit.result.cache
+/.phpunit.cache
+.DS_Store
+/HANDOFF.md
+/SYSTEM_SPEC.md
+/index.php
