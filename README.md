@@ -472,6 +472,10 @@ composer install
 vendor/bin/phpunit            # or: vendor/bin/phpunit --testdox
 ```
 
+## Changelog
+
+Please see [CHANGELOG.md](CHANGELOG.md) for more information on what has changed recently.
+
 ## Security
 
 If you discover any security related issues, please email cauesantosre4@gmail.com instead of using the issue tracker.
